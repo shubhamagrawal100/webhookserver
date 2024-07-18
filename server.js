@@ -5,9 +5,10 @@
  * LICENSE file in the root directory of this source tree.
  */
 
-import express from "express";
-import axios from "axios";
-import WhatsAppWebhookParser from "./WAParser.js";
+const express = require("express");
+const WhatsAppWebhookParser = require("./WAParser.js");
+const cassandraClient = require("./database/cassandra.js");
+
 
 const app = express();
 app.use(express.json());
@@ -18,9 +19,9 @@ app.post("/webhook", async (req, res) => {
   // log incoming messages
   console.log("Incoming webhook message:", JSON.stringify(req.body, null, 2));
 
-  const parse = new WhatsAppWebhookParser(req.body);
+  const parse = new WhatsAppWebhookParser(req.body, cassandraClient);
 
-  const parsedMessage = parse.parseMessage();
+  const parsedMessage = parse.parseAndWriteToCassandra();
   
   
   console.log(JSON.stringify(parsedMessage));
@@ -33,37 +34,6 @@ app.post("/webhook", async (req, res) => {
     // extract the business number to send the reply from it
     const business_phone_number_id =
       req.body.entry?.[0].changes?.[0].value?.metadata?.phone_number_id;
-
-    // // send a reply message as per the docs here https://developers.facebook.com/docs/whatsapp/cloud-api/reference/messages
-    // await axios({
-    //   method: "POST",
-    //   url: `https://graph.facebook.com/v18.0/${business_phone_number_id}/messages`,
-    //   headers: {
-    //     Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-    //   },
-    //   data: {
-    //     messaging_product: "whatsapp",
-    //     to: message.from,
-    //     text: { body: "Echo: " + message.text.body },
-    //     context: {
-    //       message_id: message.id, // shows the message as a reply to the original user message
-    //     },
-    //   },
-    // });
-
-    // mark incoming message as read
-    // await axios({
-    //   method: "POST",
-    //   url: `https://graph.facebook.com/v18.0/${business_phone_number_id}/messages`,
-    //   headers: {
-    //     Authorization: `Bearer ${GRAPH_API_TOKEN}`,
-    //   },
-    //   data: {
-    //     messaging_product: "whatsapp",
-    //     status: "read",
-    //     message_id: message.id,
-    //   },
-    // });
   }
 
   res.sendStatus(200);

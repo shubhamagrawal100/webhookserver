@@ -1,3 +1,4 @@
+const crypto = require('crypto');
 /**
  * Description : WhatsApp Webhook Parser Main Class
  * @fdciabdul : 2023-04-19
@@ -5,10 +6,23 @@
  * @returns {any}
  */
 class WhatsAppWebhookParser {
-        constructor(webhookData) {
-          this.webhookData = webhookData;
-        }
+      constructor(webhookData, cassandraClient) {
+        this.webhookData = webhookData;
+        this.client = cassandraClient; // Optional Cassandra client
+      }
       
+      createHash(senderPhone, receiverPhone) {
+        // Sort data
+        const data = [senderPhone, receiverPhone].sort();
+      
+        // Concatenate
+        const combinedString = data.join('');
+      
+        // Hash using SHA-256
+        const hash = crypto.createHash('sha256').update(combinedString).digest('hex');
+        return hash;
+      }
+
         /** 
          *  @fdciabdul
          *  Get Type of text Message
@@ -272,15 +286,39 @@ class WhatsAppWebhookParser {
             },
           };
         }
-        /**
-         * Main Function to parse message
-         * @param {any} webhookData
-         * @param {any} webhookEvent
-         * @param {any} webhookEventName
-         * @param {any} webhookEventTime
-         * @param {any} webhookEventSource
-         * @returns {any}
-         */
+    
+    /*
+    *  Write to cassandra. 
+    */
+        async parseAndWriteToCassandra() {
+          if (!this.webhookData || !this.client) {
+            console.warn("Missing required data. Message not processed.");
+            return;
+          }
+      
+          // Parse the webhook data
+          const message = this.parseMessage();
+      
+          if (!message) {
+            return;
+          }
+      
+          // Assuming you have conversationId in the message
+          const messageText = message.text;
+          const receiverPhone = message.display_number;
+          const senderPhone = message.from;
+          const conversationId = this.createHash(senderPhone, receiverPhone); 
+      
+          const query = `INSERT INTO conversations.convervations (conversation_id, message_id, messagetext, receiverphone, senderphone) VALUES (?, now(), ?, ?, ?)`;
+      
+          try {
+            await this.client.execute(query, [conversationId, messageText, receiverPhone, senderPhone]);
+            console.log("Message written to Cassandra:", message);
+          } catch (error) {
+            console.error("Error writing message to Cassandra:", error);
+          }
+        }  
+
     /**
      * Main Function to parse message
      * @param {any} webhookData
@@ -390,4 +428,4 @@ class WhatsAppWebhookParser {
     }
 }
 
-export default WhatsAppWebhookParser;
+module.exports =  WhatsAppWebhookParser;
