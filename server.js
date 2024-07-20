@@ -8,6 +8,7 @@
 const express = require("express");
 const WhatsAppWebhookParser = require("./WAParser.js");
 const cassandraClient = require("./database/cassandra.js");
+const { initProducer, closeProducer, sendMessage } = require('./kafkaProducer.js');
 
 
 const app = express();
@@ -21,10 +22,16 @@ app.post("/webhook", async (req, res) => {
 
   const parse = new WhatsAppWebhookParser(req.body, cassandraClient);
 
-  const parsedMessage = parse.parseAndWriteToCassandra();
-  
-  
+  const parsedMessage = parse.parseMessage();
   console.log(JSON.stringify(parsedMessage));
+  const notificationType = parsedMessage.type;
+  try {
+    await sendMessage(notificationType, parsedMessage);
+    res.status(200).send('Message sent to Kafka');
+  } catch (error) {
+    console.error('Error sending message to Kafka:', error);
+    res.status(500).send('Internal Server Error');
+  }
   // check if the webhook request contains a message
   // details on WhatsApp text message payload: https://developers.facebook.com/docs/whatsapp/cloud-api/webhooks/payload-examples#text-messages
   const message = req.body.entry?.[0]?.changes[0]?.value?.messages?.[0];
@@ -62,6 +69,12 @@ app.get("/", (req, res) => {
 Checkout README.md to start.</pre>`);
 });
 
-app.listen(PORT, () => {
+app.listen(PORT, async () => {
+  await initProducer();
   console.log(`Server is listening on port: ${PORT}`);
+});
+
+process.on('SIGTERM', async () => {
+  await closeProducer();
+  process.exit(0);
 });
