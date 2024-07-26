@@ -1,7 +1,6 @@
 const crypto = require('crypto');
 /**
  * Description : WhatsApp Webhook Parser Main Class
- * @fdciabdul : 2023-04-19
  * @param {any} webhookData
  * @returns {any}
  */
@@ -29,41 +28,44 @@ class WhatsAppWebhookParser {
          * @returns {any}
          */
         getMessage() {
-          if (
-            this.webhookData.object === 'whatsapp_business_account' &&
-            this.webhookData.entry
-          ) {
-            const entry = this.webhookData.entry[0];
-            let forward;
-      
-            if (entry.changes) {
-              const change = entry.changes[0];
-              const value = change.value;
-      
-              if (
-                value.messaging_product === 'whatsapp' &&
-                value.messages &&
-                value.messages[0].type === 'text'
-              ) {
-                const SetType = entry.changes[0].value.messages[0];
-                if (SetType.context && SetType.context.forwarded !== undefined) {
-                  forward = SetType.context.forwarded;
+          try {
+            if (
+              this.webhookData.object === 'whatsapp_business_account' &&
+              this.webhookData.entry
+            ) {
+              const entry = this.webhookData.entry[0];
+              let forward;
+        
+              if (entry.changes) {
+                const change = entry.changes[0];
+                const value = change.value;
+        
+                if (
+                  value.messaging_product === 'whatsapp' &&
+                  value.messages &&
+                  value.messages[0].type === 'text'
+                ) {
+                  const SetType = entry.changes[0].value.messages[0];
+                  if (SetType.context && SetType.context.forwarded !== undefined) {
+                    forward = SetType.context.forwarded;
+                  }
+                  return {
+                    type: 'text',
+                    from: value.messages[0].from,
+                    text: value.messages[0].text.body,
+                    timestamp: value.messages[0].timestamp,
+                    senderName: value.contacts[0].profile.name,
+                    wa_id: value.messages[0].id,
+                    timestamp: value.messages[0].timestamp,
+                    forwarded: SetType.context && SetType.context.forwarded ? true : false,
+                    quoted: SetType.context && SetType.context.forwarded ? false : SetType.context ? SetType.context : false,
+                  };
                 }
-                return {
-                  type: 'text',
-                  from: value.messages[0].from,
-                  text: value.messages[0].text.body,
-                  timestamp: value.messages[0].timestamp,
-                  senderName: value.contacts[0].profile.name,
-                  wa_id: value.messages[0].id,
-                  timestamp: value.messages[0].timestamp,
-                  forwarded: SetType.context && SetType.context.forwarded ? true : false,
-                  quoted: SetType.context && SetType.context.forwarded ? false : SetType.context ? SetType.context : false,
-                };
               }
             }
+          } catch (error) {
+             Console.log(error);
           }
-      
           return null;
         }
       
@@ -314,6 +316,7 @@ class WhatsAppWebhookParser {
           try {
             await this.client.execute(query, [conversationId, messageText, receiverPhone, senderPhone]);
             console.log("Message written to Cassandra:", message);
+            return message;
           } catch (error) {
             console.error("Error writing message to Cassandra:", error);
           }
